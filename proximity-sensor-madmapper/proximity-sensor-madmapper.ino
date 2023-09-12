@@ -21,9 +21,9 @@ int maxValuesSensors[12] = {640, 640, 640, 640, 640, 640, 640, 640, 640, 640, 64
 
 void setup()
 {
-Serial.begin(9600);
- // Serial.begin(9600);
- // delay(5000);
+  Serial.begin(9600);
+  // Serial.begin(9600);
+  // delay(5000);
 
   pinMode(LED_BUILTIN, OUTPUT);
 
@@ -63,9 +63,9 @@ Serial.begin(9600);
 
 void loop() {
   MPR121.updateAll();
-   //Serial.println( MPR121.getFilteredData(0));
+  //Serial.println( MPR121.getFilteredData(0));
   for (int i = 0; i < 12; i++) {
- Serial.println(i);
+    Serial.println(i);
     Serial.println( MPR121.getFilteredData(i));
 
   }
@@ -94,9 +94,9 @@ void talkMIDI(byte cmd, byte data1, byte data2) {
   mySerial.write(cmd);
   mySerial.write(data1);
 
-  //Some commands only have one data byte. All cmds less than 0xBn have 2 data bytes 
+  //Some commands only have one data byte. All cmds less than 0xBn have 2 data bytes
   //(sort of: http://253.ccarh.org/handout/midiprotocol/)
-  if( (cmd & 0xF0) <= 0xB0)
+  if ( (cmd & 0xF0) <= 0xB0)
     mySerial.write(data2);
 
   digitalWrite(ledPin, LOW);

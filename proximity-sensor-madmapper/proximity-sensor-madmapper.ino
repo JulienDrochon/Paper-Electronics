@@ -1,35 +1,35 @@
-
-// touch includes
+// touch  includes
 #include <MPR121.h>
-#include <MPR121_Datastream.h>
 #include <Wire.h>
+#define MPR121_ADDR 0x5C
+#define MPR121_INT 4
+// serial port communication
+//#include <SoftwareSerial.h>
+//SoftwareSerial mySerial(4, 5); // RX, TX
 
-// touch constants
-const uint32_t BAUD_RATE = 115200;
-const uint8_t MPR121_ADDR = 0x5C;
-const uint8_t MPR121_INT = 4;
+#define holdKey true  // set this to false if you want to have a single quick keystroke
+// true means the key is pressed and released when you press and release the electrode respectively
 
-// MPR121 datastream behaviour constants
-const bool MPR121_DATASTREAM_ENABLE = false;
 
-// MIDI behaviour constants
-const bool SWITCH_OFF = false;  // if set to "true", touching an electrode once turns the note on, touching it again turns it off
-                                 // if set to "false", the note is only on while the electrode is touched
-const uint8_t NOTES[] = {59, 58, 57, 56, 55, 54, 53, 52, 51, 50, 49, 48};  // piano notes from C3 to B3 in semitones
-                                                                           // a full overview to convert musical notes to MIDI note can be found here:
-                                                                           // http://newt.phys.unsw.edu.au/jw/notes.html
-const uint8_t CHANNEL = 0;  // default channel is 0
+// define LED_BUILTIN for older versions of Arduino
+#ifndef LED_BUILTIN
+#define LED_BUILTIN 13
+#endif
 
-// MIDI variables
-bool note_status[12] = {false, false, false, false, false, false, false, false, false, false, false, false};
+int minValuesSensors[12] = {579, 579, 579, 579, 579, 579, 579, 579, 579, 579, 579, 579};
+int maxValuesSensors[12] = {640, 640, 640, 640, 640, 640, 640, 640, 640, 640, 640, 640};
 
-void setup() {
-  Serial.begin(BAUD_RATE);
+void setup()
+{
+Serial.begin(9600);
+ // Serial.begin(9600);
+ // delay(5000);
 
   pinMode(LED_BUILTIN, OUTPUT);
 
+  //while (!Serial) ;
   if (!MPR121.begin(MPR121_ADDR)) {
-    Serial.println("error setting up MPR121");
+    //Serial.println("error setting up MPR121");
     switch (MPR121.getError()) {
       case NO_ERROR:
         Serial.println("no error");
@@ -58,69 +58,46 @@ void setup() {
 
   MPR121.setInterruptPin(MPR121_INT);
 
-  if (MPR121_DATASTREAM_ENABLE) {
-    MPR121.restoreSavedThresholds();
-    MPR121_Datastream.begin(&Serial);
-  } else {
-    MPR121.setTouchThreshold(40);
-    MPR121.setReleaseThreshold(20);
-  }
-
-  MPR121.setFFI(FFI_10);
-  MPR121.setSFI(SFI_10);
-  MPR121.setGlobalCDT(CDT_4US);  // reasonable for larger capacitances
-  
-  digitalWrite(LED_BUILTIN, HIGH);  // switch on user LED while auto calibrating electrodes
-  delay(1000);
-  MPR121.autoSetElectrodes();  // autoset all electrode settings
-  digitalWrite(LED_BUILTIN, LOW);
+  MPR121.updateFilteredData();
 }
 
 void loop() {
   MPR121.updateAll();
+   //Serial.println( MPR121.getFilteredData(0));
+  for (int i = 0; i < 12; i++) {
+ Serial.println(i);
+    Serial.println( MPR121.getFilteredData(i));
 
-  for (int i=0; i < 12; i++) {
-    if (MPR121.isNewTouch(i)) {
-      // if we have a new touch, turn on the onboard LED and
-      // send a "note on" message, or if in toggle mode,
-      // toggle the message
-      digitalWrite(LED_BUILTIN, HIGH);
-
-      if (!SWITCH_OFF) {
-        noteOn(CHANNEL, NOTES[i], 127);  // maximum velocity
-      } else {
-        if (note_status[i]) {
-          noteOff(CHANNEL, NOTES[i], 127);  // maximum velocity
-        } else {
-          noteOn(CHANNEL, NOTES[i], 127);  // maximum velocity
-        }
-        note_status[i] = !note_status[i];  // toggle note status
-      }
-    } else if (MPR121.isNewRelease(i)) {
-      // if we have a new release, turn off the onboard LED and
-      // send a "note off" message (unless we're in toggle mode)
-      digitalWrite(LED_BUILTIN, LOW);
-
-      if (!SWITCH_OFF) {
-        noteOff(CHANNEL, NOTES[i], 127);  // maximum velocity
-      }
-    }
   }
 
-  // flush USB buffer to ensure all notes are sent
-  MIDIUSB.flush();
+  delay(10);
 
-  if (MPR121_DATASTREAM_ENABLE) {
-    MPR121_Datastream.update();
-  }
-
-  delay(10);  // 10ms delay to give the USB MIDI target time to catch up
 }
 
-void noteOn(uint8_t channel, uint8_t pitch, uint8_t velocity) {
-  MIDIUSB.write({0x09, 0x90 | (channel & 0x0F), pitch, velocity});
+// functions below are little helpers based on using the SoftwareSerial
+// as a MIDI stream input to the VS1053 - all based on stuff from Nathan Seidle
+
+//Send a MIDI note-on message.  Like pressing a piano key
+//channel ranges from 0-15
+void noteOn(byte channel, byte note, byte attack_velocity) {
+  talkMIDI( (0x90 | channel), note, attack_velocity);
 }
 
-void noteOff(uint8_t channel, uint8_t pitch, uint8_t velocity) {
-  MIDIUSB.write({0x08, 0x80 | (channel & 0x0F), pitch, velocity});
+//Send a MIDI note-off message.  Like releasing a piano key
+void noteOff(byte channel, byte note, byte release_velocity) {
+  talkMIDI( (0x80 | channel), note, release_velocity);
+}
+
+//Plays a MIDI note. Doesn't check to see that cmd is greater than 127, or that data values are less than 127
+void talkMIDI(byte cmd, byte data1, byte data2) {
+  digitalWrite(ledPin, HIGH);
+  mySerial.write(cmd);
+  mySerial.write(data1);
+
+  //Some commands only have one data byte. All cmds less than 0xBn have 2 data bytes 
+  //(sort of: http://253.ccarh.org/handout/midiprotocol/)
+  if( (cmd & 0xF0) <= 0xB0)
+    mySerial.write(data2);
+
+  digitalWrite(ledPin, LOW);
 }

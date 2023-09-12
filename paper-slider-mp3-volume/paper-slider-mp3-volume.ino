@@ -45,7 +45,7 @@ void setup() {
     Serial.println(" when trying to start MP3 player");
   }
 
-  MP3player.playTrack(0);
+
 
 
 }
@@ -57,6 +57,12 @@ void loop() {
     Vout = (buffer) / 1024.0;
     buffer = (Vin / Vout) - 1;
     R2 = R1 * buffer;
+
+    //Play looped MP3 file
+    if(!MP3player.isPlaying()){
+      //set the mp3 file incuded on the sd card you want to play
+  MP3player.playTrack(3);
+    }
 
     // map the the resitive value of A0 range to 0..254 (max range for MP3player.setVolume())
     //0 and 12000 values are depending of your slider. You have to adkust tese values depending your slider
